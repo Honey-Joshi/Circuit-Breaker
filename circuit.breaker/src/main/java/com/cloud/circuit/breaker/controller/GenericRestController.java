@@ -2,6 +2,7 @@ package com.cloud.circuit.breaker.controller;
 
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.RequestEntity;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,7 +25,6 @@ import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 
 import javax.net.ssl.SSLException;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 @Component
@@ -39,7 +38,7 @@ import java.util.function.Consumer;
 public class GenericRestController {
     @PostMapping("/**")
     @CircuitBreaker(name = "post", fallbackMethod = "awsFallbackMethod")
-    public CompletableFuture<ResponseEntity<String>> post(RequestEntity<String> req) {
+    public Mono<String> post(RequestEntity<String> req) {
         Mono<String> user = null;
         try {
             HttpHeaders h = req.getHeaders();
@@ -65,31 +64,25 @@ public class GenericRestController {
                     )
                     .headers(consumer)
                     .headers(headers -> headers.remove(HttpHeaders.HOST))
-                    .header("Host","apigw.pg2nonprod.paytm.com")
+                    .header("Host", "apigw.pg2nonprod.paytm.com")
                     .body(BodyInserters.fromValue(req.getBody())).retrieve()
                     .bodyToMono(String.class);
-            Mono<String> finalUser = user;
-            return user.map(u -> ResponseEntity.ok(u))
-                    .defaultIfEmpty(ResponseEntity.notFound().build()).toFuture();
+            return user;
 
         } catch (WebClientResponseException.TooManyRequests e) {
             log.error("API_GW_Error : {}", e.getStackTrace());
-            return user.map(u -> ResponseEntity.ok(u))
-                    .defaultIfEmpty(ResponseEntity.notFound().build()).toFuture();
+            return user;
         }
     }
 
-    public CompletableFuture<ResponseEntity<String>> awsFallbackMethod(RequestEntity<String> req, Throwable th) {
+    public Mono<String> awsFallbackMethod(RequestEntity<String> req, Throwable th) {
 
 
         Mono<String> user = null;
         try {
-            if (th instanceof WebClientResponseException && ((WebClientResponseException)th).getStatusCode().is4xxClientError())
-            {
-                user = Mono.just("Too Many Request");
-//                log.error("Caught before Amzn Call Error : {}", th.getClass());
-                 return user.map(u -> ResponseEntity.ok("Too Many Request"))
-                    .defaultIfEmpty(ResponseEntity.notFound().build()).toFuture();
+            if (th instanceof WebClientResponseException && ((WebClientResponseException) th).getStatusCode().is4xxClientError()) {
+                user = Mono.just(HttpResponseStatus.TOO_MANY_REQUESTS.toString());
+                return user;
             }
 
             HttpHeaders h = req.getHeaders();
@@ -123,11 +116,10 @@ public class GenericRestController {
                     .headers(headers -> headers.remove(HttpHeaders.HOST))
                     .header("Host", "dev-qa.pg2nonprod.paytm.com")
                     .body(BodyInserters.fromValue(req.getBody())).retrieve().bodyToMono(String.class);
-            return user.map(u -> ResponseEntity.ok(u))
-                    .defaultIfEmpty(ResponseEntity.notFound().build()).toFuture();
+            return user;
         } catch (WebClientResponseException.TooManyRequests e) {
             log.error("Fallback Error : {}", e.getStackTrace());
-            return user.map(u -> ResponseEntity.ok(u))
-                    .defaultIfEmpty(ResponseEntity.notFound().build()).toFuture();       }
+        }
+        return Mono.just(HttpResponseStatus.INTERNAL_SERVER_ERROR.reasonPhrase());
     }
 }
