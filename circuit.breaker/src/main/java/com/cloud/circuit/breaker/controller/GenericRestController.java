@@ -59,6 +59,9 @@ public class GenericRestController {
                 .onErrorReturn(WebClientResponseException.BadGateway.class, ResponseEntity.status(HttpResponseStatus.BAD_GATEWAY.code()).build())
                 .onErrorReturn(WebClientResponseException.BadRequest.class, ResponseEntity.status(HttpResponseStatus.BAD_REQUEST.code()).build())
                 .onErrorReturn(WebClientResponseException.ServiceUnavailable.class, ResponseEntity.status(HttpResponseStatus.SERVICE_UNAVAILABLE.code()).build())
+                .onErrorReturn(WebClientResponseException.MethodNotAllowed.class, ResponseEntity.status(HttpResponseStatus.METHOD_NOT_ALLOWED.code()).build())
+
+                .onErrorReturn(WebClientResponseException.class, ResponseEntity.status(HttpResponseStatus.NOT_FOUND.code()).build())
                 .doOnNext(response -> log.info("Response from Custom-API-GW: {}", new JSONObject(response)))
                 .timeout(Duration.ofMillis(29500));
         return user;
@@ -88,7 +91,7 @@ public class GenericRestController {
                 .onErrorReturn(WebClientResponseException.BadRequest.class, ResponseEntity.status(HttpResponseStatus.BAD_REQUEST.code()).build())
                 .onErrorReturn(WebClientResponseException.ServiceUnavailable.class, ResponseEntity.status(HttpResponseStatus.SERVICE_UNAVAILABLE.code()).build())
                 .doOnNext(response -> log.info("Response from Amazon-API-GW: {}", response))
-                .timeout(Duration.ofSeconds(35));
+                .timeout(Duration.ofSeconds(29));
         return user;
     }
 }
